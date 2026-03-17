@@ -197,7 +197,6 @@ async function getGoogleDriveSummary() {
       });
     }).on('error', () => resolve('שגיאת חיבור'));
   });
-}
   console.log('✓ שרת רץ על http://localhost:' + PORT);
   if (!API_KEY) console.log('⚠  ANTHROPIC_API_KEY לא מוגדר!');
   else console.log('✓ API Key מוגדר');
