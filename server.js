@@ -393,12 +393,13 @@ async function handleTelegramMessage(body) {
   // ניסיון לזהות הוראת רישום בשפה טבעית
   const parsed = await parseNaturalLanguage(text);
   if (parsed && parsed.action === 'register') {
-    const ok = await addToDrive(parsed.type, parsed.amount, parsed.source, parsed.cat, null, null);
+    const source = (parsed.source && parsed.source.trim()) ? parsed.source : (parsed.cat || 'כללי');
+    const ok = await addToDrive(parsed.type, parsed.amount, source, parsed.cat, null, null);
     if (ok === 'duplicate') {
       sendTelegram(chatId, 'רישום זה כבר קיים היום!');
     } else if (ok) {
       const typeLabel = parsed.type === 'income' ? 'הכנסה' : 'הוצאה';
-      const msg = typeLabel + ' נרשמה!\n' + parsed.source + ': ' + parsed.amount.toLocaleString('he-IL') + ' ש"ח\nקטגוריה: ' + parsed.cat;
+      const msg = typeLabel + ' נרשמה!\n' + source + ': ' + parsed.amount.toLocaleString('he-IL') + ' ש"ח\nקטגוריה: ' + parsed.cat;
       sendTelegram(chatId, msg);
     } else {
       sendTelegram(chatId, 'שגיאה ברישום');
