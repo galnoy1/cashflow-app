@@ -188,13 +188,18 @@ async function getTelegramFileUrl(fileId) {
 }
 
 async function analyzeImageWithClaude(imageBase64, mimeType) {
+  const isPDF = mimeType === 'application/pdf';
+  const sourceBlock = isPDF
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: imageBase64 } }
+    : { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } };
+  
   const postData = JSON.stringify({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 800,
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: mimeType, data: imageBase64 } },
+        sourceBlock,
         { type: 'text', text: 'נתח את המסמך הזה (חשבונית/קבלה/תעודת משלוח) וחלץ את המידע הבא בפורמט JSON בלבד ללא טקסט נוסף:\n{"type":"income"/"expense","amount":סכום_מספרי,"source":"שם_ספק_או_לקוח","cat":"קטגוריה","invoiceId":"מספר_חשבונית_אם_קיים","date":"תאריך_YYYY-MM-DD","description":"תיאור_קצר"}\nקטגוריות הכנסה: מכירות, שירותים, עמלות, אחר\nקטגוריות הוצאה: תקשורת, שכ"ד, מזון, ציוד, שיווק, רישיונות, שכר, אחר\nאם לא ברור אם הכנסה או הוצאה, הנח שהוצאה.\nאם הסכום כולל מע"מ, השתמש בסכום הכולל.' }
       ]
     }]
@@ -289,8 +294,10 @@ async function handleTelegramMessage(body) {
   if (!message) return;
   const chatId = message.chat.id;
 
-  // טיפול בתמונה
-  if (message.photo || message.document) {
+  // טיפול בתמונה או PDF
+  const supportedTypes = ['image/jpeg','image/jpg','image/png','image/gif','image/webp','application/pdf'];
+  const isDocument = message.document && supportedTypes.includes(message.document.mime_type);
+  if (message.photo || isDocument) {
     sendTelegram(chatId, 'מנתח את המסמך...');
     try {
       let fileId, mimeType = 'image/jpeg', fileName = 'document.jpg';
