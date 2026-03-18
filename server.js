@@ -118,10 +118,10 @@ function httpsPostFollow(urlStr, postData) {
   });
 }
 
-async function addToDrive(type, amount, source) {
+async function addToDrive(type, amount, source, cat) {
   if (!DRIVE_URL || !DRIVE_TOKEN) return false;
   try {
-    const postData = JSON.stringify({ token: DRIVE_TOKEN, action: 'add', type: type, amount: amount, source: source });
+    const postData = JSON.stringify({ token: DRIVE_TOKEN, action: 'add', type: type, amount: amount, source: source, cat: cat });
     const result = await httpsPostFollow(DRIVE_URL, postData);
     const parsed = JSON.parse(result);
     return parsed.ok === true;
@@ -156,10 +156,63 @@ async function getSummaryFromDrive() {
   }
 }
 
+async function getStateFromDrive() {
+  if (!DRIVE_URL || !DRIVE_TOKEN) return null;
+  try {
+    const fullUrl = DRIVE_URL + '?token=' + encodeURIComponent(DRIVE_TOKEN);
+    const result = await httpsGetFollow(fullUrl);
+    const parsed = JSON.parse(result);
+    if (!parsed.ok) return null;
+    return JSON.parse(parsed.payload);
+  } catch(e) { return null; }
+}
+
+function buildSystemPromptFromState(state) {
+  if (!state) return 'אתה יועץ כלכלי לעסקים קטנים בישראל. ענה בעברית, קצר וממוקד.';
+  
+  const inc = (state.income || []).filter(i => !i.status || i.status === 'received').reduce((s,i) => s+i.amount, 0);
+  const exp = (state.expenses || []).reduce((s,e) => s+e.amount, 0);
+  const bal = (state.balance || 0) + inc - exp;
+  const pending = (state.income || []).filter(i => i.status === 'pending').reduce((s,i) => s+i.amount, 0);
+  
+  const cats = {};
+  (state.expenses || []).forEach(e => { cats[e.cat] = (cats[e.cat]||0) + e.amount; });
+  const topCat = Object.entries(cats).sort((a,b) => b[1]-a[1]).slice(0,3).map(([k,v]) => k+': ₪'+Math.round(v).toLocaleString('he-IL')).join(', ');
+  
+  const today = new Date();
+  const upcoming = (state.expenses || []).filter(e => {
+    if (e.type === 'variable' && e.chargeDate) {
+      const diff = (new Date(e.chargeDate) - today) / 86400000;
+      return diff >= 0 && diff <= 14;
+    }
+    if (e.type === 'fixed' && e.day) {
+      const d1 = new Date(today.getFullYear(), today.getMonth(), e.day);
+      const d = d1 >= today ? d1 : new Date(today.getFullYear(), today.getMonth()+1, e.day);
+      return (d - today) / 86400000 <= 14;
+    }
+    return false;
+  }).reduce((s,e) => s+e.amount, 0);
+
+  return `אתה יועץ כלכלי מקצועי לעסקים קטנים בישראל. ענה בעברית, קצר וממוקד, עד 3 משפטים. תן המלצות פרקטיות.
+
+נתוני העסק הנוכחיים:
+- יתרה: ₪${Math.round(bal).toLocaleString('he-IL')}
+- הכנסות שהתקבלו: ₪${Math.round(inc).toLocaleString('he-IL')} (${(state.income||[]).filter(i=>!i.status||i.status==='received').length} עסקאות)
+- הוצאות: ₪${Math.round(exp).toLocaleString('he-IL')} (${(state.expenses||[]).length} ספקים)
+- רווח: ₪${Math.round(inc-exp).toLocaleString('he-IL')}
+- חשבוניות ממתינות: ₪${Math.round(pending).toLocaleString('he-IL')}
+- תשלומים ב-14 יום: ₪${Math.round(upcoming).toLocaleString('he-IL')}
+- קטגוריות הוצאה עיקריות: ${topCat || 'אין עדיין'}
+- סף התראה: ₪${Math.round(state.threshold||5000).toLocaleString('he-IL')}`;
+}
+
 async function askClaude(question) {
+  const state = await getStateFromDrive();
+  const systemPrompt = buildSystemPromptFromState(state);
+  
   const postData = JSON.stringify({
     model: 'claude-sonnet-4-20250514', max_tokens: 500,
-    system: 'אתה יועץ כלכלי לעסקים קטנים בישראל. ענה בעברית, קצר וממוקד. עד 3 משפטים.',
+    system: systemPrompt,
     messages: [{ role: 'user', content: question }]
   });
   return new Promise(resolve => {
@@ -183,27 +236,54 @@ async function handleTelegramMessage(body) {
   const text = message.text.trim();
 
   if (text === '/start' || text === '/help') {
-    sendTelegram(chatId, 'שלום! אני יועץ התזרים שלך\n\nפקודות:\n/income 1500 לקוח ABC - רשום הכנסה\n/expense 500 ספק חומרים - רשום הוצאה\n/summary - סיכום תזרים\n\nאו שאל כל שאלה חופשית!');
+    sendTelegram(chatId,
+      'שלום! אני יועץ התזרים שלך\n\n' +
+      'פקודות:\n' +
+      '/income 1500 לקוח ABC - הכנסה\n' +
+      '/income 1500 לקוח ABC שירותים - עם קטגוריה\n' +
+      '/expense 500 ספק חומרים - הוצאה\n' +
+      '/expense 500 ספק חומרים מזון - עם קטגוריה\n' +
+      '/summary - סיכום תזרים\n\n' +
+      'קטגוריות הכנסה: מכירות, שירותים, עמלות, שכירות, אחר\n' +
+      'קטגוריות הוצאה: תקשורת, שכ\"ד, מזון, ציוד, שיווק, רישיונות, שכר, אחר\n\n' +
+      'או שאל כל שאלה על העסק שלך!'
+    );
     return;
   }
 
   if (text.startsWith('/income ')) {
     const parts = text.substring(8).trim().split(' ');
     const amount = parseFloat(parts[0]);
-    const source = parts.slice(1).join(' ') || 'לקוח';
-    if (!amount || isNaN(amount)) { sendTelegram(chatId, 'פורמט: /income סכום מקור\nלמשל: /income 1500 לקוח ABC'); return; }
-    const ok = await addToDrive('income', amount, source);
-    sendTelegram(chatId, ok ? 'הכנסה נרשמה! ' + source + ': ' + amount.toLocaleString('he-IL') + ' ש"ח' : 'שגיאה ברישום');
+    if (!amount || isNaN(amount)) { sendTelegram(chatId, 'פורמט: /income סכום מקור קטגוריה\nלמשל: /income 1500 לקוח ABC שירותים'); return; }
+    const incomeCategories = ['מכירות','שירותים','עמלות','שכירות','ריבית','אחר'];
+    const lastWord = parts[parts.length-1];
+    let cat = 'מכירות', source;
+    if (parts.length > 2 && incomeCategories.includes(lastWord)) {
+      cat = lastWord;
+      source = parts.slice(1, -1).join(' ') || 'לקוח';
+    } else {
+      source = parts.slice(1).join(' ') || 'לקוח';
+    }
+    const ok = await addToDrive('income', amount, source, cat);
+    sendTelegram(chatId, ok ? 'הכנסה נרשמה!\n' + source + ': ' + amount.toLocaleString('he-IL') + ' ש"ח\nקטגוריה: ' + cat : 'שגיאה ברישום');
     return;
   }
 
   if (text.startsWith('/expense ')) {
     const parts = text.substring(9).trim().split(' ');
     const amount = parseFloat(parts[0]);
-    const vendor = parts.slice(1).join(' ') || 'הוצאה';
-    if (!amount || isNaN(amount)) { sendTelegram(chatId, 'פורמט: /expense סכום תיאור\nלמשל: /expense 500 ספק חומרים'); return; }
-    const ok = await addToDrive('expense', amount, vendor);
-    sendTelegram(chatId, ok ? 'הוצאה נרשמה! ' + vendor + ': ' + amount.toLocaleString('he-IL') + ' ש"ח' : 'שגיאה ברישום');
+    if (!amount || isNaN(amount)) { sendTelegram(chatId, 'פורמט: /expense סכום ספק קטגוריה\nלמשל: /expense 500 פרטנר תקשורת'); return; }
+    const expenseCategories = ['תקשורת','שכ"ד','מזון','ציוד','שיווק','רישיונות','שכר','אחר'];
+    const lastWord = parts[parts.length-1];
+    let cat = 'אחר', vendor;
+    if (parts.length > 2 && expenseCategories.includes(lastWord)) {
+      cat = lastWord;
+      vendor = parts.slice(1, -1).join(' ') || 'הוצאה';
+    } else {
+      vendor = parts.slice(1).join(' ') || 'הוצאה';
+    }
+    const ok = await addToDrive('expense', amount, vendor, cat);
+    sendTelegram(chatId, ok ? 'הוצאה נרשמה!\n' + vendor + ': ' + amount.toLocaleString('he-IL') + ' ש"ח\nקטגוריה: ' + cat : 'שגיאה ברישום');
     return;
   }
 
