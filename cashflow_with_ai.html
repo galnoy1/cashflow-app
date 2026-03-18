@@ -561,19 +561,47 @@ let overviewChart = null, catChart = null;
 let backupHistory = [];
 
 // ── Storage ──────────────────────────────────────────────
-function loadData() {
+async function loadData() {
+  // Load drive config from localStorage
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) state = { ...state, ...JSON.parse(raw) };
     const dc = localStorage.getItem(DRIVE_KEY);
     if (dc) driveConfig = JSON.parse(dc);
     const bh = localStorage.getItem('cashflow_backup_history');
     if (bh) backupHistory = JSON.parse(bh);
   } catch(e) {}
+
+  // Try to load from Google Drive first
+  if (driveConfig) {
+    setSaveInd('טוען מ-Google Drive...');
+    try {
+      const res = await fetch(driveConfig.url + '?token=' + encodeURIComponent(driveConfig.token));
+      const data = await res.json();
+      if (data.ok && data.payload) {
+        const driveState = JSON.parse(data.payload);
+        state = { ...state, ...driveState };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        setSaveInd('נטען מ-Google Drive');
+      }
+    } catch(e) {
+      // Fallback to localStorage
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) state = { ...state, ...JSON.parse(raw) };
+      } catch(e2) {}
+      setSaveInd('נטען מקומית (Drive לא זמין)');
+    }
+  } else {
+    // No drive config, use localStorage
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) state = { ...state, ...JSON.parse(raw) };
+    } catch(e) {}
+    setSaveInd('נטען מקומית');
+  }
+
   document.getElementById('s-balance').value = state.balance || '';
   document.getElementById('s-thresh').value = state.threshold || 5000;
   updateDriveUI();
-  setSaveInd('נטען');
   renderAll();
   if (driveConfig) scheduleAutoBackup();
 }
@@ -582,7 +610,7 @@ function saveData(triggerDriveBackup = true) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     setSaveInd('נשמר — ' + new Date().toLocaleTimeString('he-IL', {hour:'2-digit',minute:'2-digit'}));
-    if (triggerDriveBackup && driveConfig) debouncedDriveBackup();
+    if (triggerDriveBackup && driveConfig) backupNow(true);
   } catch(e) { setSaveInd('שגיאת שמירה'); }
 }
 
@@ -668,10 +696,10 @@ async function connectDrive() {
     if (data.ok) {
       driveConfig = { url, token };
       localStorage.setItem(DRIVE_KEY, JSON.stringify(driveConfig));
-      msgEl.innerHTML = '<span style="color:var(--success)">✓ חיבור הצליח!</span>';
+      msgEl.innerHTML = '<span style="color:var(--success)">✓ חיבור הצליח! טוען נתונים...</span>';
       updateDriveUI();
+      await loadData();
       backupNow(false);
-      scheduleAutoBackup();
     } else {
       msgEl.innerHTML = `<span style="color:var(--danger)">שגיאה: ${data.error||'בדוק את הסיסמה'}</span>`;
     }
