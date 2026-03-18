@@ -374,7 +374,7 @@ async function handleTelegramMessage(body) {
     const parts = text.substring(9).trim().split(' ');
     const amount = parseFloat(parts[0]);
     if (!amount || isNaN(amount)) { sendTelegram(chatId, 'פורמט: /expense סכום ספק קטגוריה\nלמשל: /expense 500 פרטנר תקשורת'); return; }
-    const expenseCategories = ['תקשורת','שכ"ד','מזון','ציוד','שיווק','רישיונות','שכר','אחר'];
+    const expenseCategories = ['הוצאות שכר','ביטוח','עמלות בנק','סליקת כרטיסי אשראי','תיקונים','אחזקה','שכירות','קופות','חשמל','מים','ארנונה','חומרי ניקוי','חומרי אריזה','טלפון ותקשורת','אגרות','משפטיות','הוצאות שיווק','אחר'];
     const lastWord = parts[parts.length-1];
     let cat = 'אחר', vendor;
     if (parts.length > 2 && expenseCategories.includes(lastWord)) { cat = lastWord; vendor = parts.slice(1, -1).join(' ') || 'הוצאה'; }
@@ -412,7 +412,7 @@ async function handleTelegramMessage(body) {
 }
 
 async function parseNaturalLanguage(text) {
-  const prompt = 'האם ההודעה הבאה היא בקשה לרשום הכנסה או הוצאה לתזרים עסקי? אם כן, חלץ את הפרטים. אם לא (שאלה, שיחה, פקודה אחרת), החזר null.\n\nהודעה: "' + text + '"\n\nענה רק ב-JSON ללא טקסט נוסף. אם רישום: {"action":"register","type":"income"/"expense","amount":סכום,"source":"ספק/לקוח","cat":"קטגוריה"} קטגוריות הוצאה: תקשורת/שכד/מזון/ציוד/שיווק/רישיונות/שכר/אחר. קטגוריות הכנסה: מכירות/שירותים/עמלות/שכירות/אחר. אם לא רישום: null';
+  const prompt = 'האם ההודעה הבאה היא בקשה לרשום הכנסה או הוצאה לתזרים עסקי? אם כן, חלץ את הפרטים. אם לא (שאלה, שיחה, פקודה אחרת), החזר null.\n\nהודעה: "' + text + '"\n\nענה רק ב-JSON ללא טקסט נוסף. אם רישום: {"action":"register","type":"income"/"expense","amount":סכום,"source":"ספק/לקוח","cat":"קטגוריה"} קטגוריות הוצאה: הוצאות שכר/ביטוח/עמלות בנק/שכירות/חשמל/מים/ארנונה/חומרי אריזה/טלפון ותקשורת/הוצאות שיווק/אחר. קטגוריות הכנסה: מכירות/שירותים/עמלות/שכירות/אחר. אם לא רישום: null';
   const postData = JSON.stringify({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 200,
