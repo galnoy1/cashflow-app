@@ -306,6 +306,7 @@
           <div class="field"><label>סכום כולל מע"מ (₪)</label><input id="i-amount" type="number" placeholder="0" oninput="calcVat()"></div>
           <div class="field"><label>סכום ללא מע"מ (₪)</label><input id="i-amount-ex" type="number" placeholder="מחושב אוטומטית" readonly style="background:var(--bg2)"></div>
           <div class="field"><label>אמצעי תשלום</label><select id="i-payment"><option value="cash">מזומן</option><option value="credit">אשראי</option><option value="transfer">העברה בנקאית</option><option value="check">המחאה</option></select></div>
+          <div class="field"><label>סוג הכנסה</label><select id="i-type"><option value="received">חד פעמית</option><option value="recurring">קבועה (חודשית)</option></select></div>
           <div class="field"><label>תאריך קבלה בפועל</label><input id="i-date" type="date" id="i-date"></div>
           <div class="field"><label>סטטוס</label><select id="i-status"><option value="received">התקבל</option><option value="pending">ממתין לתשלום</option></select></div>
           <div class="field"><label>מספר חשבונית (אופציונלי)</label><input id="i-invoice" placeholder="12345"></div>
@@ -376,8 +377,6 @@
         <div class="metric"><div class="lbl">צפי 30 יום</div><div class="val" id="f30">₪0</div></div>
         <div class="metric"><div class="lbl">צפי 60 יום</div><div class="val" id="f60">₪0</div></div>
         <div class="metric"><div class="lbl">צפי 90 יום</div><div class="val" id="f90">₪0</div></div>
-        <div class="metric"><div class="lbl">רווח / הפסד חודשי</div><div class="val" id="f-profit-pct">—</div><div class="sub" id="f-profit-amt"></div></div>
-        <div class="metric"><div class="lbl">% הוצאות מהכנסות</div><div class="val" id="f-exp-pct">—</div><div class="sub">מומלץ מתחת ל-70%</div></div>
       </div>
       <div id="forecast-alerts"></div>
       <div class="card"><div class="card-title">הוצאות לפי קטגוריה</div><div id="fcat-bars"></div></div>
@@ -948,6 +947,7 @@ function addIncome() {
   if (!s || !a) { alert('נא למלא מקור וסכום'); return; }
   const amountExVat = Math.round(a / 1.18 * 100) / 100;
   const status = document.getElementById('i-status').value;
+  const incType = document.getElementById('i-type') ? document.getElementById('i-type').value : 'received';
   state.income.push({
     id: state.nextI++,
     source: s,
@@ -979,16 +979,6 @@ function renderForecast() {
     document.getElementById(id).textContent = fmt(v);
     document.getElementById(id).className = 'val ' + (v >= 0 ? 'green' : 'red');
   });
-  const profit = inc - exp;
-  const profitPct = inc > 0 ? Math.round(profit/inc*100) : 0;
-  const expPct = inc > 0 ? Math.round(exp/inc*100) : 0;
-  const profitEl = document.getElementById('f-profit-pct');
-  profitEl.textContent = (profit >= 0 ? '+' : '') + profitPct + '%';
-  profitEl.className = 'val ' + (profit >= 0 ? 'green' : 'red');
-  document.getElementById('f-profit-amt').textContent = fmt(Math.abs(profit)) + (profit >= 0 ? ' עודף' : ' גירעון');
-  const expPctEl = document.getElementById('f-exp-pct');
-  expPctEl.textContent = expPct + '%';
-  expPctEl.className = 'val ' + (expPct < 70 ? 'green' : expPct < 90 ? '' : 'red');
   const fa = document.getElementById('forecast-alerts'); fa.innerHTML = '';
   if (inc === 0 && exp === 0) fa.innerHTML = `<div class="alert info">ℹ הזן נתונים לתחזית</div>`;
   else if (inc < exp) fa.innerHTML = `<div class="alert warn">⚠ גירעון חודשי: ${fmt(exp-inc)}</div>`;
@@ -999,17 +989,7 @@ function renderForecast() {
   document.getElementById('fcat-bars').innerHTML = Object.entries(cats).sort((a,b) => b[1]-a[1])
     .map(([cat,amt]) => {
       const pct = inc > 0 ? Math.round(amt/inc*100) : 0;
-      const pctColor = pct > 30 ? 'var(--danger)' : pct > 15 ? 'var(--warning)' : 'var(--success)';
-      return `<div style="display:grid;grid-template-columns:120px 1fr 110px;align-items:center;gap:10px;margin-bottom:12px;font-size:13px">
-        <span style="color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${cat}</span>
-        <div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden">
-          <div style="height:100%;border-radius:4px;background:var(--danger);opacity:.75;width:${Math.round(amt/maxC*100)}%"></div>
-        </div>
-        <div style="text-align:left;line-height:1.3">
-          <div style="font-weight:600;color:var(--danger)">${fmt(amt)}</div>
-          <div style="font-size:12px;font-weight:600;color:${pctColor}">${pct}% מהכנסות</div>
-        </div>
-      </div>`;
+      return `<div class="fbar-row"><span style="color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${cat.length>12?cat.slice(0,12)+'…':cat}</span><div class="fbar-bg"><div class="fbar-fill" style="width:${Math.round(amt/maxC*100)}%"></div></div><span style="color:var(--danger);font-weight:500;text-align:right;font-size:12px">${fmt(amt)}<br><span style="color:var(--text3);font-size:10px">${pct}% מהכנסות</span></span></div>`;
     }).join('')
     || '<div class="empty-state">אין נתונים</div>';
 
@@ -1045,13 +1025,23 @@ function saveSettings() {
   saveData(); renderAll(); alert('נשמר!');
 }
 
-function resetAll() {
-  if (!confirm('למחוק את כל הנתונים?')) return;
+async function resetAll() {
+  if (!confirm('למחוק את כל הנתונים? פעולה זו תמחק גם את הגיבוי ב-Google Drive.')) return;
   localStorage.removeItem(STORAGE_KEY);
   state = { balance:0, threshold:5000, expenses:[], income:[], nextE:1, nextI:1 };
   document.getElementById('s-balance').value = '';
   document.getElementById('s-thresh').value = 5000;
-  setSaveInd('אופס'); renderAll();
+  // מחק גם מ-Drive
+  if (driveConfig) {
+    try {
+      await fetch(driveConfig.url, {
+        method: 'POST',
+        body: JSON.stringify({ token: driveConfig.token, payload: JSON.stringify(state) })
+      });
+    } catch(e) {}
+  }
+  setSaveInd('אופס');
+  renderAll();
 }
 
 function exportData() {
