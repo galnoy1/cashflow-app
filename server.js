@@ -362,6 +362,49 @@ async function handleTelegramMessage(body) {
     return;
   }
 
+  // ניסיון לזהות הוראת רישום בשפה טבעית
+  const parsed = await parseNaturalLanguage(text);
+  if (parsed && parsed.action === 'register') {
+    const ok = await addToDrive(parsed.type, parsed.amount, parsed.source, parsed.cat, null, null);
+    if (ok === 'duplicate') {
+      sendTelegram(chatId, 'רישום זה כבר קיים היום!');
+    } else if (ok) {
+      const typeLabel = parsed.type === 'income' ? 'הכנסה' : 'הוצאה';
+      const msg = typeLabel + ' נרשמה!\n' + parsed.source + ': ' + parsed.amount.toLocaleString('he-IL') + ' ש"ח\nקטגוריה: ' + parsed.cat;
+      sendTelegram(chatId, msg);
+    } else {
+      sendTelegram(chatId, 'שגיאה ברישום');
+    }
+    return;
+  }
+
+  // שאלה חופשית
   const reply = await askClaude(text);
   sendTelegram(chatId, reply);
+}
+
+async function parseNaturalLanguage(text) {
+  const prompt = 'האם ההודעה הבאה היא בקשה לרשום הכנסה או הוצאה לתזרים עסקי? אם כן, חלץ את הפרטים. אם לא (שאלה, שיחה, פקודה אחרת), החזר null.\n\nהודעה: "' + text + '"\n\nענה רק ב-JSON ללא טקסט נוסף. אם רישום: {"action":"register","type":"income"/"expense","amount":סכום,"source":"ספק/לקוח","cat":"קטגוריה"} קטגוריות הוצאה: תקשורת/שכד/מזון/ציוד/שיווק/רישיונות/שכר/אחר. קטגוריות הכנסה: מכירות/שירותים/עמלות/שכירות/אחר. אם לא רישום: null';
+  const postData = JSON.stringify({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 200,
+    messages: [{ role: 'user', content: prompt }]
+  });
+  return new Promise(resolve => {
+    const options = { hostname: 'api.anthropic.com', path: '/v1/messages', method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY, 'anthropic-version': '2023-06-01', 'Content-Length': Buffer.byteLength(postData) } };
+    const req = https.request(options, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const resp = JSON.parse(data);
+          const txt = resp.content[0].text.replace(/```json|```/g,'').trim();
+          if (txt === 'null') { resolve(null); return; }
+          resolve(JSON.parse(txt));
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.write(postData); req.end();
+  });
 }
