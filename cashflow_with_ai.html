@@ -98,7 +98,7 @@
   .add-btn:hover { background: var(--bg2); }
 
   .chart-wrap { position: relative; width: 100%; height: 220px; }
-  .fbar-row { display: grid; grid-template-columns: 80px 1fr 70px; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
+  .fbar-row { display: grid; grid-template-columns: 100px 1fr 80px; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12px; }
   .fbar-bg { height: 7px; background: var(--bg2); border-radius: 4px; overflow: hidden; }
   .fbar-fill { height: 100%; border-radius: 4px; background: var(--danger); opacity: .75; }
   .section-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -250,7 +250,24 @@
         <div class="card-title">תשלום חדש לספק</div>
         <div class="form-grid">
           <div class="field"><label>שם ספק</label><input id="f-vendor" placeholder="לדוגמה: פרטנר תקשורת"></div>
-          <div class="field"><label>קטגוריה</label><select id="f-cat"><option>שכ"ד ומשרדים</option><option>תקשורת ותשתיות</option><option>שיווק ופרסום</option><option>משכורות</option><option>ספקי חומרים</option><option>ביטוח</option><option>רשויות ומיסים</option><option>אחר</option></select></div>
+          <div class="field"><label>קטגוריה</label><select id="f-cat"><option>הוצאות שכר</option>
+<option>ביטוח</option>
+<option>עמלות בנק</option>
+<option>סליקת כרטיסי אשראי</option>
+<option>תיקונים</option>
+<option>אחזקה</option>
+<option>שכירות</option>
+<option>קופות</option>
+<option>חשמל</option>
+<option>מים</option>
+<option>ארנונה</option>
+<option>חומרי ניקוי</option>
+<option>חומרי אריזה</option>
+<option>טלפון ותקשורת</option>
+<option>אגרות</option>
+<option>משפטיות</option>
+<option>הוצאות שיווק</option>
+<option>אחר</option></select></div>
           <div class="field"><label>סכום (₪)</label><input id="f-amount" type="number" placeholder="0"></div>
           <div class="field"><label>סוג תשלום</label><select id="f-type" onchange="toggleDayField('f-day-fixed','f-day-var',this.value)"><option value="fixed">קבוע (חודשי)</option><option value="variable">משתנה (חד פעמי)</option></select></div>
           <div class="field" id="f-day-fixed"><label>יום חיוב בחודש</label><input id="f-day-num" type="number" placeholder="1–31" min="1" max="31" value="1"></div>
@@ -509,7 +526,24 @@ function doGet(e) {
     <input type="hidden" id="edit-exp-id">
     <div class="form-grid">
       <div class="field"><label>שם ספק</label><input id="edit-exp-vendor"></div>
-      <div class="field"><label>קטגוריה</label><select id="edit-exp-cat"><option>שכ"ד ומשרדים</option><option>תקשורת ותשתיות</option><option>שיווק ופרסום</option><option>משכורות</option><option>ספקי חומרים</option><option>ביטוח</option><option>רשויות ומיסים</option><option>אחר</option></select></div>
+      <div class="field"><label>קטגוריה</label><select id="edit-exp-cat"><option>הוצאות שכר</option>
+<option>ביטוח</option>
+<option>עמלות בנק</option>
+<option>סליקת כרטיסי אשראי</option>
+<option>תיקונים</option>
+<option>אחזקה</option>
+<option>שכירות</option>
+<option>קופות</option>
+<option>חשמל</option>
+<option>מים</option>
+<option>ארנונה</option>
+<option>חומרי ניקוי</option>
+<option>חומרי אריזה</option>
+<option>טלפון ותקשורת</option>
+<option>אגרות</option>
+<option>משפטיות</option>
+<option>הוצאות שיווק</option>
+<option>אחר</option></select></div>
       <div class="field"><label>סכום (₪)</label><input id="edit-exp-amount" type="number"></div>
       <div class="field"><label>סוג תשלום</label><select id="edit-exp-type" onchange="toggleDayField('edit-exp-day-fixed','edit-exp-day-var',this.value)"><option value="fixed">קבוע (חודשי)</option><option value="variable">משתנה</option></select></div>
       <div class="field" id="edit-exp-day-fixed"><label>יום חיוב בחודש</label><input id="edit-exp-day-num" type="number" placeholder="1–31" min="1" max="31" value="1"></div>
@@ -951,7 +985,10 @@ function renderForecast() {
   const cats = {}; state.expenses.forEach(e => { cats[e.cat] = (cats[e.cat]||0) + e.amount; });
   const maxC = Math.max(...Object.values(cats), 1);
   document.getElementById('fcat-bars').innerHTML = Object.entries(cats).sort((a,b) => b[1]-a[1])
-    .map(([c,a]) => `<div class="fbar-row"><span style="color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${c.length>9?c.slice(0,9)+'…':c}</span><div class="fbar-bg"><div class="fbar-fill" style="width:${Math.round(a/maxC*100)}%"></div></div><span style="color:var(--danger);font-weight:500;text-align:right">${fmt(a)}</span></div>`).join('')
+    .map(([cat,amt]) => {
+      const pct = inc > 0 ? Math.round(amt/inc*100) : 0;
+      return `<div class="fbar-row"><span style="color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${cat.length>12?cat.slice(0,12)+'…':cat}</span><div class="fbar-bg"><div class="fbar-fill" style="width:${Math.round(amt/maxC*100)}%"></div></div><span style="color:var(--danger);font-weight:500;text-align:right;font-size:12px">${fmt(amt)}<br><span style="color:var(--text3);font-size:10px">${pct}% מהכנסות</span></span></div>`;
+    }).join('')
     || '<div class="empty-state">אין נתונים</div>';
 
   const cl = Object.keys(cats), cv = Object.values(cats);
