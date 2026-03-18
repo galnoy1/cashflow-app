@@ -594,6 +594,7 @@ function doGet(e) {
       <div class="field" id="edit-exp-day-fixed"><label>יום חיוב בחודש</label><input id="edit-exp-day-num" type="number" placeholder="1–31" min="1" max="31" value="1"></div>
       <div class="field" id="edit-exp-day-var" style="display:none"><label>תאריך חיוב</label><input id="edit-exp-day" type="date"></div>
       <div class="field"><label>הערות</label><input id="edit-exp-notes"></div>
+      <div class="field"><label>מע"מ</label><select id="edit-exp-vat-type"><option value="vat">חייב במע"מ</option><option value="exempt">פטור ממע"מ</option></select></div>
     </div>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="closeEditModal('edit-exp-modal')">ביטול</button>
@@ -950,7 +951,9 @@ function addExpense() {
     chargeDay = parseInt(chargeDate.slice(8,10)) || 1;
     addedDate = chargeDate.slice(0,7);
   }
-  const vatType = document.getElementById('f-vat-type') ? document.getElementById('f-vat-type').value : 'vat';
+  const exemptCatsAdd = ['הוצאות שכר', 'ביטוח', 'עמלות בנק', 'ארנונה', 'אגרות', 'משפטיות'];
+  const catVal = document.getElementById('f-cat').value;
+  const vatType = document.getElementById('f-vat-type') ? document.getElementById('f-vat-type').value : (exemptCatsAdd.includes(catVal) ? 'exempt' : 'vat');
   state.expenses.push({ id: state.nextE++, vendor: v, cat: document.getElementById('f-cat').value, amount: a, type: expType, chargeDate, day: chargeDay, addedDate, notes: document.getElementById('f-notes').value, vatType });
   ['f-vendor','f-amount','f-notes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-day').value = new Date().toISOString().slice(0,10);
@@ -1115,6 +1118,13 @@ function importData(event) {
 
 
 
+function autoSetVatType() {
+  const cat = document.getElementById('f-cat') ? document.getElementById('f-cat').value : '';
+  const exemptCats = ['הוצאות שכר', 'ביטוח', 'עמלות בנק', 'ארנונה', 'אגרות', 'משפטיות'];
+  const vatSelect = document.getElementById('f-vat-type');
+  if (vatSelect) vatSelect.value = exemptCats.includes(cat) ? 'exempt' : 'vat';
+}
+
 function toggleDayField(fixedId, varId, type) {
   document.getElementById(fixedId).style.display = type === 'fixed' ? 'block' : 'none';
   document.getElementById(varId).style.display = type === 'variable' ? 'block' : 'none';
@@ -1132,6 +1142,10 @@ function openEditExpense(id) {
   document.getElementById('edit-exp-cat').value = e.cat;
   document.getElementById('edit-exp-amount').value = e.amount;
   document.getElementById('edit-exp-type').value = e.type;
+  // Auto-set VAT type based on category
+  const exemptCatsEdit = ['הוצאות שכר', 'ביטוח', 'עמלות בנק', 'ארנונה', 'אגרות', 'משפטיות'];
+  const editVatSelect = document.getElementById('edit-exp-vat-type');
+  if (editVatSelect) editVatSelect.value = e.vatType || (exemptCatsEdit.includes(e.cat) ? 'exempt' : 'vat');
   toggleDayField('edit-exp-day-fixed','edit-exp-day-var', e.type);
   if (e.type === 'fixed') {
     document.getElementById('edit-exp-day-num').value = e.day || 1;
@@ -1164,7 +1178,8 @@ function saveEditExpense() {
     chargeDate: newChargeDate,
     day: newDay,
     addedDate: newChargeDate ? newChargeDate.slice(0,7) : e.addedDate,
-    notes: document.getElementById('edit-exp-notes').value
+    notes: document.getElementById('edit-exp-notes').value,
+    vatType: document.getElementById('edit-exp-vat-type') ? document.getElementById('edit-exp-vat-type').value : (e.vatType || 'vat')
   });
   closeEditModal('edit-exp-modal'); saveData(); renderAll();
 }
