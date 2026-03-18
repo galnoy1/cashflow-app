@@ -251,7 +251,7 @@
         <div class="card-title">תשלום חדש לספק</div>
         <div class="form-grid">
           <div class="field"><label>שם ספק</label><input id="f-vendor" placeholder="לדוגמה: פרטנר תקשורת"></div>
-          <div class="field"><label>קטגוריה</label><select id="f-cat" onchange="autoSetVatType()"><option>הוצאות שכר</option>
+          <div class="field"><label>קטגוריה</label><select id="f-cat"><option>הוצאות שכר</option>
 <option>ביטוח</option>
 <option>עמלות בנק</option>
 <option>סליקת כרטיסי אשראי</option>
@@ -304,9 +304,10 @@
         <div class="card-title">הכנסה חדשה</div>
         <div class="form-grid">
           <div class="field"><label>מקור / לקוח</label><input id="i-source" placeholder="לקוח ABC"></div>
-          <div class="field"><label>קטגוריה</label><select id="i-cat"><option>מכירות</option><option>שירותים</option><option>עמלות</option><option>שכירות</option><option>ריבית / השקעות</option><option>אחר</option></select></div>
-          <div class="field"><label>סכום כולל מע"מ (₪)</label><input id="i-amount" type="number" placeholder="0" oninput="calcVat()"></div>
-          <div class="field"><label>סכום ללא מע"מ (₪)</label><input id="i-amount-ex" type="number" placeholder="מחושב אוטומטית" readonly style="background:var(--bg2)"></div>
+          <div class="field"><label>קטגוריה</label><select id="i-cat" onchange="autoSetIncVatType()"><option>מכירות</option><option>שירותים</option><option>עמלות</option><option>שכירות</option><option>טיפים</option><option>ריבית / השקעות</option><option>אחר</option></select></div>
+          <div class="field"><label>סכום ללא מע"מ (₪)</label><input id="i-amount" type="number" placeholder="0" oninput="calcVat()"></div>
+          <div class="field"><label>סכום כולל מע"מ (₪)</label><input id="i-amount-ex" type="number" placeholder="מחושב אוטומטית" readonly style="background:var(--bg2)"></div>
+          <div class="field"><label>סוג מע"מ</label><select id="i-vat-type" onchange="calcVat()"><option value="vat">חייב במע"מ</option><option value="exempt">פטור ממע"מ (טיפים, פטורים)</option></select></div>
           <div class="field"><label>אמצעי תשלום</label><select id="i-payment"><option value="cash">מזומן</option><option value="credit">אשראי</option><option value="transfer">העברה בנקאית</option><option value="check">המחאה</option></select></div>
           <div class="field"><label>סוג הכנסה</label><select id="i-type"><option value="received">חד פעמית</option><option value="recurring">קבועה (חודשית)</option></select></div>
           <div class="field"><label>תאריך קבלה בפועל</label><input id="i-date" type="date" id="i-date"></div>
@@ -319,7 +320,7 @@
         </div>
       </div>
       <div class="card">
-        <table class="tbl"><thead><tr><th>מקור</th><th>סכום / מע"מ</th><th>תאריך</th><th>תשלום</th><th>סטטוס</th><th></th></tr></thead><tbody id="inc-tbody"></tbody></table>
+        <table class="tbl"><thead><tr><th>מקור</th><th>נטו / ברוטו</th><th>תאריך</th><th>תשלום</th><th>סטטוס</th><th></th></tr></thead><tbody id="inc-tbody"></tbody></table>
       </div>
     </div>
 
@@ -854,6 +855,7 @@ const totalExp = () => state.expenses.reduce((s,e) => s + e.amount, 0);
 const totalInc = () => state.income.filter(i => !i.status || i.status === 'received').reduce((s,i) => s + i.amount, 0);
 const totalIncGross = () => state.income.reduce((s,i) => s + i.amount, 0);
 const totalIncExVat = () => state.income.filter(i => !i.status || i.status === 'received').reduce((s,i) => s + (i.amountExVat||i.amount), 0);
+const totalIncTips = () => state.income.filter(i => i.cat === 'טיפים').reduce((s,i) => s + i.amount, 0);
 const fixedExp = () => state.expenses.filter(e => e.type === 'fixed').reduce((s,e) => s + e.amount, 0);
 
 const sidebarPages = ['dashboard','expenses','income','forecast','vat','alerts','daily','backup','settings'];
@@ -982,15 +984,24 @@ function renderIncome() {
     ? state.income.map(i => {
       const paymentLabel = {cash:'מזומן',credit:'אשראי',transfer:'העברה',check:'המחאה'}[i.payment]||'—';
       const statusBadge = i.status==='pending' ? `<span style="background:var(--warning-bg);color:var(--warning);font-size:11px;padding:2px 7px;border-radius:999px;font-weight:500">ממתין</span>` : `<span style="background:var(--success-bg);color:var(--success);font-size:11px;padding:2px 7px;border-radius:999px;font-weight:500">התקבל</span>`;
-      return `<tr><td style="font-weight:500">${i.source}</td><td style="color:var(--success);font-weight:500">${fmt(i.amount)}<br><span style="font-size:11px;color:var(--text3)">ללא מע"מ: ${fmt(i.amountExVat||i.amount)}</span></td><td style="color:var(--text2)">${i.date||'—'}</td><td>${paymentLabel}</td><td>${statusBadge}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditIncome(${i.id})">ערוך</button><button class="del-btn" onclick="delIncome(${i.id})">מחק</button></td></tr>`;
+      return `<tr><td style="font-weight:500">${i.source}</td><td style="color:var(--success);font-weight:500">${fmt(i.amountExVat||i.amount)}<br><span style="font-size:11px;color:var(--text3)">כולל מע"מ: ${fmt(i.amount)}${i.vatType==='exempt'?' (פטור)":''}</span></td><td style="color:var(--text2)">${i.date||'—'}</td><td>${paymentLabel}</td><td>${statusBadge}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditIncome(${i.id})">ערוך</button><button class="del-btn" onclick="delIncome(${i.id})">מחק</button></td></tr>`;
     }).join('')
     : `<tr><td colspan="5"><div class="empty-state">אין הכנסות — לחץ "הוסף הכנסה"</div></td></tr>`;
 }
 
 function calcVat() {
-  const gross = parseFloat(document.getElementById('i-amount').value) || 0;
-  const exVat = Math.round(gross / 1.18 * 100) / 100;
-  document.getElementById('i-amount-ex').value = exVat > 0 ? exVat : '';
+  const net = parseFloat(document.getElementById('i-amount').value) || 0;
+  const vatType = document.getElementById('i-vat-type') ? document.getElementById('i-vat-type').value : 'vat';
+  const gross = vatType === 'exempt' ? net : Math.round(net * 1.18 * 100) / 100;
+  document.getElementById('i-amount-ex').value = gross > 0 ? gross : '';
+}
+
+function autoSetIncVatType() {
+  const cat = document.getElementById('i-cat') ? document.getElementById('i-cat').value : '';
+  const exemptIncCats = ['טיפים', 'ריבית / השקעות'];
+  const vatSelect = document.getElementById('i-vat-type');
+  if (vatSelect) vatSelect.value = exemptIncCats.includes(cat) ? 'exempt' : 'vat';
+  calcVat();
 }
 
 function addIncome() {
