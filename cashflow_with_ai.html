@@ -199,6 +199,7 @@
     <button onclick="showPage('income')">💰 הכנסות</button>
     <div class="sidebar-section">ניתוח</div>
     <button onclick="showPage('forecast')">📈 תחזית תזרים</button>
+    <button onclick="showPage('vat')">🧾 מע"מ</button>
     <button onclick="showPage('alerts')">🔔 התראות ובריאות</button>
     <button onclick="showPage('daily')">📅 יומן יומי</button>
     <div class="sidebar-section">גיבוי</div>
@@ -273,6 +274,7 @@
           <div class="field" id="f-day-fixed"><label>יום חיוב בחודש</label><input id="f-day-num" type="number" placeholder="1–31" min="1" max="31" value="1"></div>
           <div class="field" id="f-day-var" style="display:none"><label>תאריך חיוב</label><input id="f-day" type="date"></div>
           <div class="field"><label>הערות</label><input id="f-notes" placeholder="אופציונלי"></div>
+          <div class="field"><label>מע"מ</label><select id="f-vat-type"><option value="vat">חייב במע"מ</option><option value="exempt">פטור ממע"מ (שכר, ארנונה, ביטוח, בנק)</option></select></div>
         </div>
         <div class="form-actions">
           <button class="btn-secondary" onclick="hideForm('exp-form')">ביטול</button>
@@ -367,6 +369,48 @@
           <div class="legend"><span><span class="legend-dot" style="background:#1D9E75"></span>הכנסות</span><span><span class="legend-dot" style="background:#D85A30"></span>הוצאות</span></div>
         </div>
         <div style="position:relative;width:100%;height:180px"><canvas id="dailyChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- VAT PAGE -->
+    <div id="page-vat" class="page">
+      <div class="page-title">ניהול מע"מ</div>
+      <div class="metrics">
+        <div class="metric"><div class="lbl">מע"מ עסקאות (הכנסות)</div><div class="val red" id="vat-out">₪0</div><div class="sub">גביתי מלקוחות</div></div>
+        <div class="metric"><div class="lbl">מע"מ תשומות (הוצאות)</div><div class="val green" id="vat-in">₪0</div><div class="sub">שילמתי לספקים</div></div>
+        <div class="metric"><div class="lbl">לתשלום / להחזר</div><div class="val" id="vat-balance">₪0</div><div class="sub" id="vat-balance-label">—</div></div>
+      </div>
+
+      <div id="vat-alert-area"></div>
+
+      <div class="card">
+        <div class="section-hdr">
+          <div class="card-title" style="margin:0">הגדרות דיווח</div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>תדירות דיווח</label>
+            <select id="vat-freq" onchange="saveVatSettings()">
+              <option value="2">כל חודשיים</option>
+              <option value="1">כל חודש</option>
+            </select>
+          </div>
+          <div class="field"><label>חודש תחילת תקופה נוכחית</label>
+            <input type="month" id="vat-period-start" onchange="saveVatSettings()">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">תקופה נוכחית</div>
+        <div id="vat-period-details"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">פירוט הוצאות לפי סוג מע"מ</div>
+        <table class="tbl">
+          <thead><tr><th>ספק</th><th>סכום</th><th>מע"מ תשומות</th><th>סוג</th></tr></thead>
+          <tbody id="vat-exp-tbody"></tbody>
+        </table>
       </div>
     </div>
 
@@ -592,7 +636,7 @@ function doGet(e) {
 <script>
 const STORAGE_KEY = 'cashflow_app_v2';
 const DRIVE_KEY = 'cashflow_drive_config';
-let state = { balance: 0, threshold: 5000, expenses: [], income: [], nextE: 1, nextI: 1 };
+let state = { balance: 0, threshold: 5000, expenses: [], income: [], nextE: 1, nextI: 1, vatFreq: 2, vatPeriodStart: new Date().toISOString().slice(0,7) };
 let driveConfig = null;
 let overviewChart = null, catChart = null;
 let backupHistory = [];
@@ -811,12 +855,15 @@ const totalIncGross = () => state.income.reduce((s,i) => s + i.amount, 0);
 const totalIncExVat = () => state.income.filter(i => !i.status || i.status === 'received').reduce((s,i) => s + (i.amountExVat||i.amount), 0);
 const fixedExp = () => state.expenses.filter(e => e.type === 'fixed').reduce((s,e) => s + e.amount, 0);
 
-const sidebarPages = ['dashboard','expenses','income','forecast','alerts','daily','backup','settings'];
+const sidebarPages = ['dashboard','expenses','income','forecast','vat','alerts','daily','backup','settings'];
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('.sidebar button').forEach((b,i) => b.classList.toggle('active', sidebarPages[i] === id));
-  if (id === 'daily') { initDailyDate(); renderDaily(); }
+  if (id === 'daily') { initDailyDate();
+if (state.vatFreq) { const f = document.getElementById('vat-freq'); if(f) f.value = state.vatFreq; }
+if (state.vatPeriodStart) { const s = document.getElementById('vat-period-start'); if(s) s.value = state.vatPeriodStart; } renderDaily(); }
+  if (id === 'vat') renderVat();
   document.querySelectorAll('.mobile-nav button').forEach((b,i) => b.classList.toggle('active', ['dashboard','expenses','income','backup','settings'][i] === id));
 }
 
@@ -903,7 +950,8 @@ function addExpense() {
     chargeDay = parseInt(chargeDate.slice(8,10)) || 1;
     addedDate = chargeDate.slice(0,7);
   }
-  state.expenses.push({ id: state.nextE++, vendor: v, cat: document.getElementById('f-cat').value, amount: a, type: expType, chargeDate, day: chargeDay, addedDate, notes: document.getElementById('f-notes').value });
+  const vatType = document.getElementById('f-vat-type') ? document.getElementById('f-vat-type').value : 'vat';
+  state.expenses.push({ id: state.nextE++, vendor: v, cat: document.getElementById('f-cat').value, amount: a, type: expType, chargeDate, day: chargeDay, addedDate, notes: document.getElementById('f-notes').value, vatType });
   ['f-vendor','f-amount','f-notes'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-day').value = new Date().toISOString().slice(0,10);
   document.getElementById('f-day-num').value = 1;
@@ -963,6 +1011,8 @@ function addIncome() {
   ['i-source','i-amount','i-amount-ex','i-invoice'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('i-date').value = new Date().toISOString().slice(0,10);
 initDailyDate();
+if (state.vatFreq) { const f = document.getElementById('vat-freq'); if(f) f.value = state.vatFreq; }
+if (state.vatPeriodStart) { const s = document.getElementById('vat-period-start'); if(s) s.value = state.vatPeriodStart; }
   hideForm('inc-form'); saveData(); renderAll();
 }
 
@@ -1391,9 +1441,121 @@ function addDailyExpense() {
 }
 
 
+
+// ── VAT ──────────────────────────────────────────────────
+function saveVatSettings() {
+  const freq = document.getElementById('vat-freq');
+  const start = document.getElementById('vat-period-start');
+  if (freq) state.vatFreq = parseInt(freq.value) || 2;
+  if (start && start.value) state.vatPeriodStart = start.value;
+  saveData();
+  renderVat();
+}
+
+function renderVat() {
+  const freqEl = document.getElementById('vat-freq');
+  const startEl = document.getElementById('vat-period-start');
+  if (freqEl) freqEl.value = state.vatFreq || 2;
+  if (startEl) startEl.value = state.vatPeriodStart || new Date().toISOString().slice(0,7);
+
+  const VAT_RATE = 0.18;
+  const freq = state.vatFreq || 2;
+  const periodStart = state.vatPeriodStart || new Date().toISOString().slice(0,7);
+
+  // Calculate current period end
+  const startDate = new Date(periodStart + '-01');
+  const endDate = new Date(startDate);
+  endDate.setMonth(endDate.getMonth() + freq);
+  const endStr = new Date(endDate.getTime() - 1).toISOString().slice(0,7);
+  const nextDeadline = new Date(endDate);
+  nextDeadline.setDate(19); // deadline is 19th of month after period ends
+
+  // Filter income in current period
+  const periodIncome = state.income.filter(i => {
+    const d = (i.date || '').slice(0,7);
+    return d >= periodStart && d <= endStr;
+  });
+
+  // Filter expenses in current period  
+  const periodExpenses = state.expenses.filter(e => {
+    const d = (e.chargeDate || (e.addedDate + '-01') || '').slice(0,7);
+    return d >= periodStart && d <= endStr;
+  });
+
+  // VAT on income (all income is vatable)
+  const totalInc = periodIncome.reduce((s,i) => s + i.amount, 0);
+  const vatOut = Math.round(totalInc * VAT_RATE / (1 + VAT_RATE));
+
+  // VAT on expenses (only vatable ones)
+  const vatableExp = periodExpenses.filter(e => !e.vatType || e.vatType === 'vat');
+  const exemptExp = periodExpenses.filter(e => e.vatType === 'exempt');
+  const totalVatableExp = vatableExp.reduce((s,e) => s + e.amount, 0);
+  const vatIn = Math.round(totalVatableExp * VAT_RATE / (1 + VAT_RATE));
+
+  const vatBalance = vatOut - vatIn;
+
+  document.getElementById('vat-out').textContent = fmt(vatOut);
+  document.getElementById('vat-in').textContent = fmt(vatIn);
+  document.getElementById('vat-balance').textContent = fmt(Math.abs(vatBalance));
+  document.getElementById('vat-balance').className = 'val ' + (vatBalance > 0 ? 'red' : 'green');
+  document.getElementById('vat-balance-label').textContent = vatBalance > 0 ? 'לתשלום לרשות המסים' : 'להחזר מרשות המסים';
+
+  // Alert area
+  const alertArea = document.getElementById('vat-alert-area');
+  const today = new Date();
+  const daysToDeadline = Math.round((nextDeadline - today) / 86400000);
+  if (daysToDeadline <= 14 && daysToDeadline >= 0) {
+    alertArea.innerHTML = `<div class="alert warn">⚠ דיווח מע"מ עד ${nextDeadline.toLocaleDateString('he-IL')} — עוד ${daysToDeadline} ימים. לתשלום: ${fmt(vatBalance > 0 ? vatBalance : 0)}</div>`;
+  } else if (daysToDeadline < 0) {
+    alertArea.innerHTML = `<div class="alert warn">⚠ תאריך הדיווח עבר! עדכן את תקופת הדיווח.</div>`;
+  } else {
+    alertArea.innerHTML = `<div class="alert info">ℹ הדיווח הבא עד ${nextDeadline.toLocaleDateString('he-IL')} — עוד ${daysToDeadline} ימים</div>`;
+  }
+
+  // Period details
+  document.getElementById('vat-period-details').innerHTML = `
+    <div class="close-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <span style="color:var(--text2)">תקופה נוכחית</span>
+      <span style="font-weight:500">${new Date(periodStart+'-01').toLocaleDateString('he-IL',{month:'long',year:'numeric'})} — ${new Date(endStr+'-01').toLocaleDateString('he-IL',{month:'long',year:'numeric'})}</span>
+    </div>
+    <div class="close-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <span style="color:var(--text2)">מועד הגשה</span>
+      <span style="font-weight:500">${nextDeadline.toLocaleDateString('he-IL')}</span>
+    </div>
+    <div class="close-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <span style="color:var(--text2)">הכנסות בתקופה</span>
+      <span style="font-weight:500">${fmt(totalInc)}</span>
+    </div>
+    <div class="close-row" style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <span style="color:var(--text2)">הוצאות חייבות מע"מ</span>
+      <span style="font-weight:500">${fmt(totalVatableExp)}</span>
+    </div>
+    <div class="close-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px">
+      <span style="color:var(--text2)">הוצאות פטורות מע"מ</span>
+      <span style="font-weight:500">${fmt(exemptExp.reduce((s,e)=>s+e.amount,0))}</span>
+    </div>`;
+
+  // Expense breakdown table
+  document.getElementById('vat-exp-tbody').innerHTML = periodExpenses.length
+    ? periodExpenses.map(e => {
+        const isVat = !e.vatType || e.vatType === 'vat';
+        const vatAmt = isVat ? Math.round(e.amount * VAT_RATE / (1 + VAT_RATE)) : 0;
+        return `<tr>
+          <td style="font-weight:500">${e.vendor}</td>
+          <td style="color:var(--danger)">${fmt(e.amount)}</td>
+          <td style="color:var(--success)">${isVat ? fmt(vatAmt) : '—'}</td>
+          <td><span class="badge ${isVat ? 'fixed' : 'variable'}">${isVat ? 'חייב' : 'פטור'}</span></td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="4"><div class="empty-state">אין הוצאות בתקופה זו</div></td></tr>';
+}
+
+
 // Set today as default for date inputs
 document.getElementById('i-date').value = new Date().toISOString().slice(0,10);
 initDailyDate();
+if (state.vatFreq) { const f = document.getElementById('vat-freq'); if(f) f.value = state.vatFreq; }
+if (state.vatPeriodStart) { const s = document.getElementById('vat-period-start'); if(s) s.value = state.vatPeriodStart; }
 document.getElementById('f-day').value = new Date().toISOString().slice(0,10);
 loadData();
 loadAIInsights();
