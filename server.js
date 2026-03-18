@@ -10,6 +10,9 @@ const RENDER_URL = process.env.RENDER_URL || '';
 const DRIVE_URL = process.env.DRIVE_URL || '';
 const DRIVE_TOKEN = process.env.DRIVE_TOKEN || '';
 
+// רשימת משתמשים מורשים — הוסף ID נוסף עם פסיק כדי להוסיף משתמש
+const ALLOWED_USERS = [775430324];
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -293,6 +296,13 @@ async function handleTelegramMessage(body) {
   const message = body.message;
   if (!message) return;
   const chatId = message.chat.id;
+  const userId = message.from && message.from.id;
+
+  // בדיקת הרשאה
+  if (!ALLOWED_USERS.includes(userId)) {
+    sendTelegram(chatId, 'אין לך הרשאה להשתמש בבוט זה.');
+    return;
+  }
 
   // טיפול בתמונה או PDF
   const supportedTypes = ['image/jpeg','image/jpg','image/png','image/gif','image/webp','application/pdf'];
