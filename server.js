@@ -71,6 +71,27 @@ function sendTelegram(chatId, text) {
   req.write(sendData); req.end();
 }
 
+function sendTelegramWithButton(chatId, text, driveUrl) {
+  const waText = driveUrl
+    ? 'חשבונית חדשה: ' + driveUrl
+    : 'חשבונית חדשה נרשמה בתזרים';
+  const waUrl = 'https://wa.me/972553055098?text=' + encodeURIComponent(waText);
+  const keyboard = {
+    inline_keyboard: [[
+      { text: '📤 העבר לרואה חשבון', url: waUrl }
+    ]]
+  };
+  const sendData = JSON.stringify({
+    chat_id: chatId,
+    text: text,
+    reply_markup: keyboard
+  });
+  const options = { hostname: 'api.telegram.org', path: '/bot' + TELEGRAM_TOKEN + '/sendMessage', method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(sendData) } };
+  const req = https.request(options, res => { res.resume(); });
+  req.on('error', () => {});
+  req.write(sendData); req.end();
+}
+
 function httpsGetFollow(urlStr) {
   return new Promise((resolve, reject) => {
     function doGet(u, redirects) {
@@ -303,8 +324,8 @@ async function handleTelegramMessage(body) {
       msg += 'ספק/לקוח: ' + (analysis.source || 'לא זוהה') + '\n';
       msg += 'קטגוריה: ' + (analysis.cat || 'אחר') + '\n';
       if (analysis.invoiceId) msg += 'מספר חשבונית: ' + analysis.invoiceId + '\n';
-      if (driveUrl) msg += 'נשמר בדרייב';
-      sendTelegram(chatId, msg);
+      if (driveUrl) msg += 'נשמר בדרייב\n';
+      sendTelegramWithButton(chatId, msg, driveUrl);
     } catch(e) {
       console.log('Image error:', e.message);
       sendTelegram(chatId, 'שגיאה בעיבוד התמונה: ' + e.message);
