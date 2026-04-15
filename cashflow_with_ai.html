@@ -1615,24 +1615,6 @@ document.getElementById('f-day').value = new Date().toISOString().slice(0,10);
 loadData();
 loadAIInsights();
 </script>
-
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-msg assistant">שלום! אני יועץ כלכלי AI שמכיר את הנתונים של העסק שלך. מה תרצה לדעת?</div>
-    </div>
-    <div class="suggested-q" id="suggested-questions">
-      <button onclick="askQuestion(this.textContent)">מה מצב התזרים שלי?</button>
-      <button onclick="askQuestion(this.textContent)">היכן אני מוציא הכי הרבה?</button>
-      <button onclick="askQuestion(this.textContent)">מתי יש לי סיכון תזרימי?</button>
-      <button onclick="askQuestion(this.textContent)">מה ההמלצה שלך לחיסכון?</button>
-    </div>
-    <div class="chat-input-row">
-      <input id="chat-input" placeholder="שאל כל שאלה על העסק שלך..." onkeydown="if(event.key==='Enter')sendChat()">
-      <button class="chat-send" id="chat-send-btn" onclick="sendChat()">שלח</button>
-    </div>
-  </div>
-</div>
-
-
 <div class="chat-overlay" id="chat-overlay">
   <div class="chat-box">
     <div class="chat-header">
