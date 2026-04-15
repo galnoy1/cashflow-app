@@ -877,11 +877,9 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('.sidebar button').forEach((b,i) => b.classList.toggle('active', sidebarPages[i] === id));
-  if (id === 'daily') { initDailyDate();
-if (state.vatFreq) { const f = document.getElementById('vat-freq'); if(f) f.value = state.vatFreq; }
-if (state.vatPeriodStart) { const s = document.getElementById('vat-period-start'); if(s) s.value = state.vatPeriodStart; } renderDaily(); }
+  if (id === 'daily') { initDailyDate(); renderDaily(); }
   if (id === 'vat') renderVat();
-  document.querySelectorAll('.mobile-nav button').forEach((b,i) => b.classList.toggle('active', ['dashboard','expenses','income','backup','settings'][i] === id));
+  document.querySelectorAll('.mobile-nav button').forEach((b,i) => b.classList.toggle('active', ['dashboard','expenses','income','daily','backup','settings'][i] === id));
 }
 
 function showForm(id) { document.getElementById(id).style.display = 'block'; }
