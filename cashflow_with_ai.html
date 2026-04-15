@@ -285,8 +285,14 @@
         </div>
       </div>
       <div class="card">
-        <table class="tbl"><thead><tr><th>ספק</th><th>קטגוריה</th><th>סכום</th><th>סוג</th><th>תאריך חיוב</th><th></th></tr></thead><tbody id="exp-tbody"></tbody></table>
-      </div>
+<thead><tr>
+  <th onclick="sortExpenses('vendor')" style="cursor:pointer">ספק ↕</th>
+  <th onclick="sortExpenses('cat')" style="cursor:pointer">קטגוריה ↕</th>
+  <th onclick="sortExpenses('amount')" style="cursor:pointer">סכום ↕</th>
+  <th>סוג</th>
+  <th onclick="sortExpenses('chargeDate')" style="cursor:pointer">תאריך חיוב ↕</th>
+  <th></th>
+</tr></thead>      </div>
     </div>
 
     <!-- INCOME -->
