@@ -964,7 +964,6 @@ function renderExpenses() {
     ? sorted.map(e => `<tr><td style="font-weight:500">${e.vendor}</td><td style="color:var(--text2);font-size:12px">${e.cat}</td><td style="color:var(--danger);font-weight:500">${fmt(e.amount)}</td><td><span class="badge ${e.type}">${e.type==='fixed'?'קבוע':'משתנה'}</span></td><td>${e.type==='fixed' ? 'יום '+(e.day||'—') : (e.chargeDate ? new Date(e.chargeDate).toLocaleDateString('he-IL') : '—')}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditExpense(${e.id})">ערוך</button><button class="del-btn" onclick="delExpense(${e.id})">מחק</button></td></tr>`).join('')
     : `<tr><td colspan="6"><div class="empty-state">אין תשלומים — לחץ "הוסף תשלום"</div></td></tr>`;
 }
-
 function addExpense() {
   const v = document.getElementById('f-vendor').value.trim(), a = parseFloat(document.getElementById('f-amount').value);
   if (!v || !a) { alert('נא למלא שם ספק וסכום'); return; }
