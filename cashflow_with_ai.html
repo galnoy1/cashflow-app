@@ -284,19 +284,10 @@
           <button class="btn-primary" onclick="addExpense()">שמור תשלום</button>
         </div>
       </div>
-     <div class="card">
-  <table class="tbl">
-    <thead><tr>
-      <th onclick="sortExpenses('vendor')" style="cursor:pointer">ספק ↕</th>
-      <th onclick="sortExpenses('cat')" style="cursor:pointer">קטגוריה ↕</th>
-      <th onclick="sortExpenses('amount')" style="cursor:pointer">סכום ↕</th>
-      <th>סוג</th>
-      <th onclick="sortExpenses('chargeDate')" style="cursor:pointer">תאריך חיוב ↕</th>
-      <th></th>
-    </tr></thead>
-    <tbody id="exp-tbody"></tbody>
-  </table>
-</div>
+      <div class="card">
+        <table class="tbl"><thead><tr><th>ספק</th><th>קטגוריה</th><th>סכום</th><th>סוג</th><th>תאריך חיוב</th><th></th></tr></thead><tbody id="exp-tbody"></tbody></table>
+      </div>
+    </div>
 
     <!-- INCOME -->
     <div id="page-income" class="page">
@@ -877,9 +868,11 @@ function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   document.querySelectorAll('.sidebar button').forEach((b,i) => b.classList.toggle('active', sidebarPages[i] === id));
-  if (id === 'daily') { initDailyDate(); renderDaily(); }
+  if (id === 'daily') { initDailyDate();
+if (state.vatFreq) { const f = document.getElementById('vat-freq'); if(f) f.value = state.vatFreq; }
+if (state.vatPeriodStart) { const s = document.getElementById('vat-period-start'); if(s) s.value = state.vatPeriodStart; } renderDaily(); }
   if (id === 'vat') renderVat();
-  document.querySelectorAll('.mobile-nav button').forEach((b,i) => b.classList.toggle('active', ['dashboard','expenses','income','daily','backup','settings'][i] === id));
+  document.querySelectorAll('.mobile-nav button').forEach((b,i) => b.classList.toggle('active', ['dashboard','expenses','income','backup','settings'][i] === id));
 }
 
 function showForm(id) { document.getElementById(id).style.display = 'block'; }
@@ -945,27 +938,12 @@ function renderDashboard() {
 }
 
 // ── Expenses ──────────────────────────────────────────────
-let expSortCol = '';
-let expSortAsc = true;
-
-function sortExpenses(col) {
-  if (expSortCol === col) { expSortAsc = !expSortAsc; }
-  else { expSortCol = col; expSortAsc = true; }
-  renderExpenses();
-}
-
 function renderExpenses() {
-  const sorted = [...state.expenses].sort((a, b) => {
-    if (!expSortCol) return 0;
-    if (expSortCol === 'amount') return expSortAsc ? a.amount - b.amount : b.amount - a.amount;
-    const va = String(a[expSortCol] || '');
-    const vb = String(b[expSortCol] || '');
-    return expSortAsc ? va.localeCompare(vb, 'he') : vb.localeCompare(va, 'he');
-  });
-  document.getElementById('exp-tbody').innerHTML = sorted.length
-    ? sorted.map(e => `<tr><td style="font-weight:500">${e.vendor}</td><td style="color:var(--text2);font-size:12px">${e.cat}</td><td style="color:var(--danger);font-weight:500">${fmt(e.amount)}</td><td><span class="badge ${e.type}">${e.type==='fixed'?'קבוע':'משתנה'}</span></td><td>${e.type==='fixed' ? 'יום '+(e.day||'—') : (e.chargeDate ? new Date(e.chargeDate).toLocaleDateString('he-IL') : '—')}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditExpense(${e.id})">ערוך</button><button class="del-btn" onclick="delExpense(${e.id})">מחק</button></td></tr>`).join('')
+  document.getElementById('exp-tbody').innerHTML = state.expenses.length
+    ? state.expenses.map(e => `<tr><td style="font-weight:500">${e.vendor}</td><td style="color:var(--text2);font-size:12px">${e.cat}</td><td style="color:var(--danger);font-weight:500">${fmt(e.amount)}</td><td><span class="badge ${e.type}">${e.type==='fixed'?'קבוע':'משתנה'}</span></td><td>${e.type==='fixed' ? 'יום '+(e.day||'—') : (e.chargeDate ? new Date(e.chargeDate).toLocaleDateString('he-IL') : '—')}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditExpense(${e.id})">ערוך</button><button class="del-btn" onclick="delExpense(${e.id})">מחק</button></td></tr>`).join('')
     : `<tr><td colspan="6"><div class="empty-state">אין תשלומים — לחץ "הוסף תשלום"</div></td></tr>`;
 }
+
 function addExpense() {
   const v = document.getElementById('f-vendor').value.trim(), a = parseFloat(document.getElementById('f-amount').value);
   if (!v || !a) { alert('נא למלא שם ספק וסכום'); return; }
@@ -1620,6 +1598,24 @@ document.getElementById('f-day').value = new Date().toISOString().slice(0,10);
 loadData();
 loadAIInsights();
 </script>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-msg assistant">שלום! אני יועץ כלכלי AI שמכיר את הנתונים של העסק שלך. מה תרצה לדעת?</div>
+    </div>
+    <div class="suggested-q" id="suggested-questions">
+      <button onclick="askQuestion(this.textContent)">מה מצב התזרים שלי?</button>
+      <button onclick="askQuestion(this.textContent)">היכן אני מוציא הכי הרבה?</button>
+      <button onclick="askQuestion(this.textContent)">מתי יש לי סיכון תזרימי?</button>
+      <button onclick="askQuestion(this.textContent)">מה ההמלצה שלך לחיסכון?</button>
+    </div>
+    <div class="chat-input-row">
+      <input id="chat-input" placeholder="שאל כל שאלה על העסק שלך..." onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="chat-send" id="chat-send-btn" onclick="sendChat()">שלח</button>
+    </div>
+  </div>
+</div>
+
+
 <div class="chat-overlay" id="chat-overlay">
   <div class="chat-box">
     <div class="chat-header">
