@@ -952,9 +952,16 @@ function sortExpenses(col) {
   else { expSortCol = col; expSortAsc = true; }
   renderExpenses();
 }
-  function renderExpenses() {
-  document.getElementById('exp-tbody').innerHTML = state.expenses.length
-    ? state.expenses.map(e => `<tr><td style="font-weight:500">${e.vendor}</td><td style="color:var(--text2);font-size:12px">${e.cat}</td><td style="color:var(--danger);font-weight:500">${fmt(e.amount)}</td><td><span class="badge ${e.type}">${e.type==='fixed'?'קבוע':'משתנה'}</span></td><td>${e.type==='fixed' ? 'יום '+(e.day||'—') : (e.chargeDate ? new Date(e.chargeDate).toLocaleDateString('he-IL') : '—')}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditExpense(${e.id})">ערוך</button><button class="del-btn" onclick="delExpense(${e.id})">מחק</button></td></tr>`).join('')
+function renderExpenses() {
+  const sorted = [...state.expenses].sort((a, b) => {
+    if (!expSortCol) return 0;
+    if (expSortCol === 'amount') return expSortAsc ? a.amount - b.amount : b.amount - a.amount;
+    const va = String(a[expSortCol] || '');
+    const vb = String(b[expSortCol] || '');
+    return expSortAsc ? va.localeCompare(vb, 'he') : vb.localeCompare(va, 'he');
+  });
+  document.getElementById('exp-tbody').innerHTML = sorted.length
+    ? sorted.map(e => `<tr><td style="font-weight:500">${e.vendor}</td><td style="color:var(--text2);font-size:12px">${e.cat}</td><td style="color:var(--danger);font-weight:500">${fmt(e.amount)}</td><td><span class="badge ${e.type}">${e.type==='fixed'?'קבוע':'משתנה'}</span></td><td>${e.type==='fixed' ? 'יום '+(e.day||'—') : (e.chargeDate ? new Date(e.chargeDate).toLocaleDateString('he-IL') : '—')}</td><td style="white-space:nowrap"><button class="edit-btn" onclick="openEditExpense(${e.id})">ערוך</button><button class="del-btn" onclick="delExpense(${e.id})">מחק</button></td></tr>`).join('')
     : `<tr><td colspan="6"><div class="empty-state">אין תשלומים — לחץ "הוסף תשלום"</div></td></tr>`;
 }
 
